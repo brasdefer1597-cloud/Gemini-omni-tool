@@ -1,123 +1,68 @@
 
-import * as fs from 'fs/promises';
-import * as path from 'path';
-import { genkit, z } from 'genkit';
-import express from "express";
-import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
-import { ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate } from '@langchain/core/prompts';
-import { StringOutputParser } from '@langchain/core/output_parsers';
-import { RunnableSequence } from '@langchain/core/runnables';
-import { HumanMessage } from "@langchain/core/messages";
+// server.ts
+/**
+ * @file El backend seguro (Backend-for-Frontend).
+ * Expone endpoints locales que el frontend puede consumir de forma segura.
+ * Es la única parte del sistema que debe comunicarse con servicios externos.
+ */
 
-// --- Configuración Centralizada ---
-const PORT = process.env.PORT || 3000;
-const STATIC_DIR = path.resolve(__dirname, 'static');
-const IMAGES_DIR = path.resolve(STATIC_DIR, 'images');
+import express from 'express';
+import bodyParser from 'body-parser';
+import { generateContent, generateImage } from './services/gemini'; // Usamos el Facade
+import { AdapterError } from './services/api/GeminiAdapter';
 
-// --- Inicialización de la IA ---
-// Asegúrate de tener GOOGLE_API_KEY en tu entorno.
-export const ai = genkit({
-    plugins: [],
-});
+const app = express();
+const port = process.env.PORT || 3000;
 
-const model = new ChatGoogleGenerativeAI({
-    model: "gemini-1.5-flash",
-    // La API Key se toma automáticamente de la variable de entorno GOOGLE_API_KEY
-});
+app.use(bodyParser.json({ limit: '10mb' })); // Aumentar límite para imágenes
+app.use(express.static('static')); // Servir archivos estáticos (index.html, main.js)
 
-// --- Definición del Flujo de IA (Genkit) ---
-export const recipieWithContextFlow = ai.defineFlow(
-    {
-        name: 'recipieFlow',
-        inputSchema: z.object({
-            photoUrl: z.string(),
-            userPrompt: z.string(),
-        }),
-        outputSchema: z.string()
-    },
-    async (inputs) => {
-        // La construcción de la plantilla y la cadena es más clara dentro del flujo
-        const systemMessage = SystemMessagePromptTemplate.fromTemplate("Return a recipie in markdown format");
-        const userMessageAboutPrompt = HumanMessagePromptTemplate.fromTemplate("The user has asked: {userPrompt}");
-        const imageMessage = new HumanMessage({
-            content: [
-                { type: "image_url", image_url: { url: "{photoUrl}" } },
-                { type: "text", text: "Analyze the attached image." }
-            ],
-        });
+// El ROL CENTRAL que definiste, pero guardado de forma segura en el backend
+const SYSTEM_INSTRUCTION = "ROL CENTRAL: Chalamandra Magistral DecoX - Consultor de Marca y Arquitecto de Estrategia...";
 
-        const prompt = ChatPromptTemplate.fromMessages([
-            systemMessage,
-            userMessageAboutPrompt,
-            imageMessage,
-        ]);
+app.post('/api/generate', async (req, res) => {
+    const { userPrompt, image, mode } = req.body;
 
-        const chain = RunnableSequence.from([
-            prompt,
-            model,
-            new StringOutputParser(),
-        ]);
+    try {
+        let result;
+        if (mode === 'IMAGE_GENERATION') {
+            // Lógica para generar imagen
+            const base64Image = await generateImage(userPrompt, { numberOfImages: 1, aspectRatio: '1:1', outputMimeType: 'image/png'});
+            result = { base64Image };
+        } else {
+            // Lógica para generar contenido (receta/thinking)
+            const config = {
+                model: 'gemini-pro-vision',
+                temperature: 0.7,
+                maxOutputTokens: 2048,
+                // Inyectamos la instrucción del sistema de forma segura aquí
+                systemInstruction: SYSTEM_INSTRUCTION 
+            };
+            
+            // Las herramientas también se definen en el backend
+            const tools = [{ name: 'get_recipe', description: 'Extrae una receta de cocina de la imagen y el texto' }];
 
-        return await chain.invoke({
-            userPrompt: inputs.userPrompt,
-            photoUrl: inputs.photoUrl,
-        });
-    }
-);
-
-// --- Creación del Servidor Express ---
-async function createServer() {
-    const app = express();
-    app.use(express.static(STATIC_DIR));
-    app.use(express.json());
-
-    app.post("/api/generate", async (req, res) => {
-        console.log(`[Request] Received request for recipe generation.`);
-        const { image, userPrompt } = req.body;
-
-        // 1. Validación de Entradas
-        if (!image || !userPrompt) {
-            console.error("[Validation Error] Missing 'image' or 'userPrompt'.");
-            return res.status(400).send("Bad Request: 'image' and 'userPrompt' are required.");
+            const generationResult = await generateContent(userPrompt, image, config, tools);
+            result = generationResult;
         }
 
-        try {
-            // 2. Saneamiento de Seguridad (Previene Path Traversal)
-            const saneImageName = path.basename(image); // Elimina cualquier intento de navegación por directorios
-            const imagePath = path.resolve(IMAGES_DIR, saneImageName);
+        res.json(result);
 
-            // Verificación extra para asegurar que el archivo está dentro del directorio esperado
-            if (!imagePath.startsWith(IMAGES_DIR)) {
-                console.error(`[Security] Forbidden path detected: ${imagePath}`);
-                return res.status(403).send("Forbidden: Invalid image path.");
-            }
-            
-            console.log(`[File IO] Reading image: ${imagePath}`);
-            const imageBase64 = await fs.readFile(imagePath, { encoding: 'base64' });
+    } catch (error) {
+        console.error('[SRAP] API Call Failed:', error);
 
-            // 3. Ejecución del Flujo de IA
-            const result = await recipieWithContextFlow({
-                photoUrl: `data:image/jpeg;base64,${imageBase64}`,
-                userPrompt: userPrompt
+        if (error instanceof AdapterError && error.isCircuitBreakerOpen) {
+            res.status(503).json({ 
+                fallbackText: 'El servicio está experimentando problemas y no está disponible temporalmente. Por favor, inténtalo más tarde.' 
             });
-
-            console.log(`[Success] Recipe generated successfully.`);
-            return res.send(result);
-
-        } catch (error) {
-            // 4. Manejo Robusto de Errores
-            console.error("[Server Error]", error);
-            const errorMessage = (error as Error).code === 'ENOENT'
-                ? "The specified image was not found."
-                : "Failed to generate the recipe due to an internal error.";
-            
-            return res.status(500).send(errorMessage);
+        } else {
+            res.status(500).json({ 
+                fallbackText: 'No se pudo generar una respuesta. Por favor, revisa la consola del servidor para más detalles.' 
+            });
         }
-    });
+    }
+});
 
-    app.listen(PORT, () => {
-        console.log(`[Server] Started on http://localhost:${PORT}`);
-    });
-}
-
-createServer();
+app.listen(port, () => {
+    console.log(`Servidor escuchando en http://localhost:${port}`);
+});
