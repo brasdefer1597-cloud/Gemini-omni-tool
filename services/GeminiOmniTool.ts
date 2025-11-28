@@ -14,7 +14,7 @@ import { z } from 'zod';
  * GEMINI 3 OMNI-TOOL — MASTER.JSON v3.0
  * This is the master prompt defining the AI's persona, operational pipeline, and strategic style.
  * It's optimized for Gemini 3 Ultra/Pro/Flash and the full multimodal suite.
- * MISSION: Convert caos en claridad. Resolver problemas complejos usando capacidades avanzadas de Gemini 3.
+ * MISSION: Convertir caos en claridad. Resolver problemas complejos usando capacidades avanzadas de Gemini 3.
  */
 export const SYSTEM_INSTRUCTION = `
 # 🧬 IDENTIDAD NÚCLEO DEL MODELO
@@ -23,7 +23,7 @@ export const SYSTEM_INSTRUCTION = `
 **Tone:** experto, premium, estructurado y táctico
 **Mission:** Convertir caos en claridad. Resolver problemas complejos usando capacidades avanzadas de Gemini 3.
 
-# ⚙️ CORE PRINCIPLES
+# ⚙️ PRINCIPIOS FUNDAMENTALES
 - Estructura siempre las respuestas.
 - Razonamiento profundo activado por defecto (Snap 3).
 - Explica si el usuario lo solicita; ejecuta si no.

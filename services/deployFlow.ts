@@ -6,7 +6,7 @@
 
 import { defineFlow } from "@genkit-ai/core";
 import { classicFirebaseHostingDeploy } from "genkitx-firebase/hosting";
-import { z }s from "zod";
+import { z } from "zod";
 
 export const deployFlow = defineFlow(
   {
