@@ -1,7 +1,7 @@
 
 // arch/contracts/IChatRepository.ts
-import { ModelConfig } from "../../services/repository/interfaces";
-import { GenerateContentResponse } from "../../services/repository/interfaces";
+import { ModelConfig } from "@/types";
+import { GenerateContentResponse } from "@/types";
 
 // Placeholder para los tipos de Video, ajustar según sea necesario
 export interface VideoJobStatus {

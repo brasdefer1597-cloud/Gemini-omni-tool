@@ -6,6 +6,17 @@
  * y evitar problemas de resolución de módulos en un entorno de desarrollo plano.
  */
 
+// --- UI & State Management --- //
+export type ChatMode = 'FAST' | 'THINKING' | 'SEARCH';
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'model';
+  text: string;
+  timestamp: number;
+  mode: ChatMode;
+}
+
 // --- Telemetry --- //
 export interface ITelemetryClient {
     trackEvent(name: string, properties?: Record<string, any>): void;
