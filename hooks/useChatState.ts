@@ -1,25 +1,15 @@
 
 // hooks/useChatState.ts
 /**
- * @file El cerebro de la aplicación.
- * Este hook encapsula toda la lógica de negocio para la interacción del chat,
- * incluyendo la gestión del estado, la comunicación con el backend de Genkit,
- * el manejo de errores y la degradación elegante del servicio.
+ * @file El cerebro de la UI, ahora un cliente ligero para el Chalamandra Master Core.
+ * Su única responsabilidad es enviar el prompt del usuario al backend y mostrar
+ * la respuesta orquestada.
  */
 
 import { useState, useCallback } from 'react';
+import { runMasterCore, MasterResponse } from '../services/MasterCoreAdapter'; // Importa el nuevo puente
+import { ChatMessage, ChatMode } from '../types'; // Mantiene tipos de UI
 
-// El tipo para el modo de chat, alineado con el backend
-export type ChatMode = 'FAST' | 'THINKING' | 'SEARCH';
-
-// Definición del contrato de un mensaje en el chat
-export interface ChatMessage {
-    id: string;
-    role: 'user' | 'model' | 'system';
-    content: string;
-}
-
-// Definición del estado que maneja el hook
 export interface ChatState {
     messages: ChatMessage[];
     isLoading: boolean;
@@ -29,47 +19,54 @@ export interface ChatState {
 export const useChatState = () => {
     const [state, setState] = useState<ChatState>({ messages: [], isLoading: false, error: null });
 
-    const sendMessage = useCallback(async (prompt: string, mode: ChatMode) => {
-        // 1. Actualización optimista de la UI y estado de carga
-        const userMessage: ChatMessage = { id: `user-${Date.now()}`, role: 'user', content: `[${mode}] ${prompt}` };
+    const dispatchMessage = useCallback(async (text: string, mode: ChatMode) => {
+        const userMessage: ChatMessage = { id: `user-${Date.now()}`, role: 'user', text, timestamp: Date.now(), mode };
         setState(prevState => ({ ...prevState, isLoading: true, error: null, messages: [...prevState.messages, userMessage] }));
 
         try {
-            // 2. Llamada al flujo de Genkit a través de su endpoint automático
-            const response = await fetch('/api/flow/omniChatFlow', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                // El cuerpo debe coincidir con el inputSchema del flujo
-                body: JSON.stringify({ input: { userPrompt: prompt, mode } }),
-            });
+            // **Llamada única al Master Core**
+            // Toda la complejidad está ahora en el backend.
+            const response: MasterResponse = await runMasterCore(text);
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || `Error del servidor: ${response.status}`);
-            }
-
-            // La respuesta de un flujo de Genkit es directamente el resultado
-            const modelContent = await response.json();
-
-            const modelMessage: ChatMessage = { id: `model-${Date.now()}`, role: 'model', content: modelContent };
-            setState(prevState => ({ ...prevState, messages: [...prevState.messages, modelMessage] }));
-
-        } catch (error) {
-            // 3. Degradación elegante y manejo de errores
-            const systemMessage: ChatMessage = { 
-                id: `system-${Date.now()}`,
-                role: 'system', 
-                content: `El servicio no está disponible temporalmente. Por favor, intenta más tarde. [Error: ${error instanceof Error ? error.message : 'Unknown'}]`
+            // La respuesta del backend es la verdad final
+            const modelMessage: ChatMessage = { 
+                id: `model-${Date.now()}`,
+                role: 'model', 
+                text: response.text, // Muestra la respuesta de texto curada por el backend
+                timestamp: Date.now(), 
+                mode 
             };
-            setState(prevState => ({ ...prevState, error: error as Error, messages: [...prevState.messages, systemMessage] }));
+            
+            setState(prevState => ({ ...prevState, messages: [...prevState.messages, modelMessage], isLoading: false }));
 
-        } finally {
-            // 4. Asegurar que el estado de carga siempre se resuelva
-            setState(prevState => ({ ...prevState, isLoading: false }));
+        } catch (error: any) {
+            console.error("[useChatState] Error dispatching message to Master Core:", error);
+            const errorMessage: ChatMessage = {
+                id: `error-${Date.now()}`,
+                role: 'model', // Se muestra como un mensaje del sistema
+                text: "Ocurrió un error al comunicarse con el Chalamandra Master Core. Revisa la consola para más detalles.",
+                timestamp: Date.now(),
+                mode
+            };
+            setState(prevState => ({ ...prevState, error, isLoading: false, messages: [...prevState.messages, errorMessage] }));
         }
     }, []);
 
-    return { ...state, sendMessage };
+    // Las funciones de envío ahora solo llaman al despachador unificado.
+    const sendMessage = useCallback((text: string, mode: ChatMode) => {
+        return dispatchMessage(text, mode);
+    }, [dispatchMessage]);
+
+    const sendMessageWithFile = useCallback((text: string, file: File, mode: ChatMode) => {
+        // La lógica de subida de archivos ahora necesitaría una ruta al backend.
+        // Por ahora, solo enviamos el texto.
+        const textWithFile = `${text}\n\n(Archivo adjunto: ${file.name} - La lógica de carga al backend está pendiente)`;
+        return dispatchMessage(textWithFile, mode);
+    }, [dispatchMessage]);
+
+    return { 
+        ...state, 
+        sendMessage, 
+        sendMessageWithFile 
+    };
 };

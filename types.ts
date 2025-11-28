@@ -46,7 +46,8 @@ export interface ModelConfig {
 export interface ImageConfig {
   numberOfImages: number;
   outputMimeType: 'image/jpeg' | 'image/png';
-  aspectRatio: '1:1' | '3:4' | '4:3' | '9:16' | '16:9';
+  aspectRatio: '1:1' | '2:3' | '3:2' | '3:4' | '4:3' | '16:9' | '21:9';
+  resolution: '1K' | '2K' | '4K';
 }
 
 export interface Tool {
@@ -70,8 +71,9 @@ export interface VideoJobStatus {
 
 // --- Adapters & Services --- //
 export interface IGenAIAdapter {
-  generateContent(prompt: string, imageBase64: string | null, config: ModelConfig, tools?: Tool[]): Promise<GenerationResult>;
+  generateContent(prompt: string, imageBase64: string | null, config: ModelConfig, tools?: Tool[], fileUri?: string): Promise<GenerationResult>;
   generateImage(prompt: string, config: ImageConfig): Promise<string>;
+  uploadFile(file: File): Promise<string>;
 }
 
 export interface IChatRepository {

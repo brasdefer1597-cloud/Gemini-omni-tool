@@ -33,12 +33,13 @@ export const omniChatFlow = defineFlow(
   async ({ userPrompt, mode }) => {
 
     const availableTools = [fileSystemTool, searchTool];
+    const thinkingSystemInstruction = "You are an expert reasoning engine for the 'Chalamandra Omni-Tool' suite. Analyze the user's request deeply, think step-by-step, and provide a comprehensive, well-structured answer, translating complex problems into clarity.";
 
     // Modo THINKING: Usa el modelo más potente y siempre tiene acceso a herramientas.
     if (mode === 'THINKING') {
       const response = await gemini.generate({
         model: 'gemini-1.5-pro',
-        system: SYSTEM_INSTRUCTION,
+        system: thinkingSystemInstruction,
         prompt: userPrompt,
         tools: availableTools, 
       });
