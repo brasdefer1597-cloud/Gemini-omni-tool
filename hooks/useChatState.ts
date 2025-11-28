@@ -3,13 +3,14 @@
 /**
  * @file El cerebro de la aplicación.
  * Este hook encapsula toda la lógica de negocio para la interacción del chat,
- * incluyendo la gestión del estado, la comunicación con el backend a través del facade,
+ * incluyendo la gestión del estado, la comunicación con el backend de Genkit,
  * el manejo de errores y la degradación elegante del servicio.
  */
 
 import { useState, useCallback } from 'react';
-import { generateContent } from '../services/gemini'; // Consume el facade
-import { ModelConfig, Tool } from '../types'; // Corregido
+
+// El tipo para el modo de chat, alineado con el backend
+export type ChatMode = 'FAST' | 'THINKING' | 'SEARCH';
 
 // Definición del contrato de un mensaje en el chat
 export interface ChatMessage {
@@ -25,44 +26,42 @@ export interface ChatState {
     error: Error | null;
 }
 
-// Opciones para la generación de contenido
-const modelConfig: ModelConfig = {
-    model: 'gemini-pro-vision', // Modelo por defecto
-    temperature: 0.7,
-    maxOutputTokens: 2048,
-};
-
 export const useChatState = () => {
     const [state, setState] = useState<ChatState>({ messages: [], isLoading: false, error: null });
 
-    const sendMessage = useCallback(async (prompt: string, imageBase64: string | null = null) => {
+    const sendMessage = useCallback(async (prompt: string, mode: ChatMode) => {
         // 1. Actualización optimista de la UI y estado de carga
-        const userMessage: ChatMessage = { id: `user-${Date.now()}`, role: 'user', content: prompt };
+        const userMessage: ChatMessage = { id: `user-${Date.now()}`, role: 'user', content: `[${mode}] ${prompt}` };
         setState(prevState => ({ ...prevState, isLoading: true, error: null, messages: [...prevState.messages, userMessage] }));
 
         try {
-            // 2. Llamada a la capa de infraestructura a través del facade
-            const result = await generateContent(prompt, imageBase64, modelConfig);
+            // 2. Llamada al flujo de Genkit a través de su endpoint automático
+            const response = await fetch('/api/flow/omniChatFlow', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                // El cuerpo debe coincidir con el inputSchema del flujo
+                body: JSON.stringify({ input: { userPrompt: prompt, mode } }),
+            });
 
-            let modelContent = '';
-            if (result.type === 'text') {
-                modelContent = result.content;
-            } else if (result.type === 'tool_call') {
-                // En un futuro, aquí se manejaría la visualización de llamadas a herramientas
-                modelContent = `[Tool Call: ${result.toolName} with args: ${JSON.stringify(result.args)}]`;
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || `Error del servidor: ${response.status}`);
             }
+
+            // La respuesta de un flujo de Genkit es directamente el resultado
+            const modelContent = await response.json();
 
             const modelMessage: ChatMessage = { id: `model-${Date.now()}`, role: 'model', content: modelContent };
             setState(prevState => ({ ...prevState, messages: [...prevState.messages, modelMessage] }));
 
         } catch (error) {
             // 3. Degradación elegante y manejo de errores
-            // El hook no necesita saber POR QUÉ falló (Circuit Breaker, 5xx, etc.)
-            // Simplemente recibe un error y actualiza el estado para que la UI reaccione.
             const systemMessage: ChatMessage = { 
                 id: `system-${Date.now()}`,
                 role: 'system', 
-                content: `Service temporarily unavailable. Please try again later. [Error: ${error instanceof Error ? error.message : 'Unknown'}]`
+                content: `El servicio no está disponible temporalmente. Por favor, intenta más tarde. [Error: ${error instanceof Error ? error.message : 'Unknown'}]`
             };
             setState(prevState => ({ ...prevState, error: error as Error, messages: [...prevState.messages, systemMessage] }));
 

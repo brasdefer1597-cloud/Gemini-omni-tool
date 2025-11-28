@@ -1,70 +1,67 @@
 
 // services/flows.ts
 /**
- * @file Define los flujos de Genkit-lite que orquestan la lógica del negocio y las llamadas a la IA.
+ * @file Define los flujos de Genkit que orquestan la lógica del negocio y las llamadas a la IA.
  */
 
-import { defineFlow } from "./genkitOrchestrator";
-import { getHeuristicInsight, HeuristicInsight } from "./chalamandraCore";
-import { ServiceFactory } from "./repository/ServiceFactory";
-import { ModelConfig } from "./repository/interfaces";
+import { defineFlow, defineSchema } from "@genkit-ai/core";
+import { gemini } from '@genkit-ai/google-genai';
 
-// Obtenemos una instancia del repositorio de chat para usarla en nuestros flujos
-const chatRepo = ServiceFactory.getChatRepository();
+// Importa las herramientas y la configuración del módulo Omni-Tool
+import { fileSystemTool, searchTool, SYSTEM_INSTRUCTION } from './GeminiOmniTool';
 
-// --- Definiciones de Pasos de IA ---
-// Estos son los pasos que interactuarán con Gemini.
+// Esquema de entrada para el flujo, esperando el prompt y el modo de operación
+const omniChatSchema = defineSchema({
+  type: 'object',
+  properties: {
+    userPrompt: { type: 'string' },
+    mode: { type: 'string', enum: ['FAST', 'THINKING', 'SEARCH'] },
+  },
+  required: ['userPrompt', 'mode'],
+});
 
-interface ExpansionInput {
-    insight: string;
-    prompt: string;
-}
+/**
+ * El flujo principal que gestiona todas las interacciones de chat.
+ * Selecciona el modelo y las herramientas de Gemini basándose en el modo proporcionado.
+ */
+export const omniChatFlow = defineFlow(
+  {
+    name: 'omniChatFlow',
+    inputSchema: omniChatSchema,
+    outputSchema: { type: 'string' },
+  },
+  async ({ userPrompt, mode }) => {
 
-async function expandWithAI(input: ExpansionInput): Promise<string> {
-    const modelConfig: ModelConfig = { 
-        model: 'gemini-pro', // Usamos un modelo rápido como Flash para expansión
-        temperature: 0.5,
-        maxOutputTokens: 250,
-    };
-    
-    const prompt = `Based on the following insight: "${input.insight}", expand on the original prompt: "${input.prompt}". Provide a more detailed request for cái gì.`;
-    
-    const response = await chatRepo.generateText(prompt, null, modelConfig);
-    return response.content;
-}
+    const availableTools = [fileSystemTool, searchTool];
 
-async function generateTacticalPlan(expandedPrompt: string): Promise<string> {
-    const modelConfig: ModelConfig = { 
-        model: 'gemini-pro', // Usamos un modelo más potente para la planificación
-        temperature: 0.7,
-        maxOutputTokens: 500,
-    };
+    // Modo THINKING: Usa el modelo más potente y siempre tiene acceso a herramientas.
+    if (mode === 'THINKING') {
+      const response = await gemini.generate({
+        model: 'gemini-1.5-pro',
+        system: SYSTEM_INSTRUCTION,
+        prompt: userPrompt,
+        tools: availableTools, 
+      });
+      return response.text();
+    }
 
-    const prompt = `Given the following expanded request, create a concise, step-by-step tactical plan to address it. Format the output as a numbered list.
+    // Modo SEARCH: Usa un modelo rápido pero con acceso a herramientas para buscar información.
+    if (mode === 'SEARCH') {
+      const response = await gemini.generate({
+        model: 'gemini-1.5-flash',
+        system: SYSTEM_INSTRUCTION,
+        prompt: userPrompt,
+        tools: availableTools, // El modelo decide si usar la herramienta.
+      });
+      return response.text();
+    }
 
-Request: "${expandedPrompt}"`;
-
-    const response = await chatRepo.generateText(prompt, null, modelConfig);
-    return response.content;
-}
-
-
-// --- Definición del Flujo ---
-
-export const heuristicAnalysisFlow = defineFlow(
-    'heuristicAnalysis',
-    [
-        {
-            name: 'getHeuristicInsight',
-            fn: (input: { prompt: string }) => getHeuristicInsight(input),
-        },
-        {
-            name: 'expandWithAI',
-            fn: (input: HeuristicInsight) => expandWithAI({ insight: input.insight, prompt: input.prompt }),
-        },
-        {
-            name: 'generateTacticalPlan',
-            fn: generateTacticalPlan,
-        },
-    ]
+    // Modo FAST (por defecto): Usa el modelo más rápido sin herramientas para respuestas instantáneas.
+    const response = await gemini.generate({
+      model: 'gemini-1.5-flash',
+      system: SYSTEM_INSTRUCTION,
+      prompt: userPrompt,
+    });
+    return response.text();
+  }
 );
