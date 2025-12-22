@@ -1,0 +1,8 @@
+{
+  "name": "Chalamandraomni",
+  "description": "A multimodal dialectical AI assistant fusing on-device Gemini Nano with Cloud Gemini Pro for advanced reasoning, synthesis, and generation.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
