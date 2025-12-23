@@ -1,38 +1,31 @@
 
 // components/LiveAudio.tsx
 import React, { useEffect, useState, useRef } from 'react';
-import { useChatState } from '../hooks/useChatState';
-import { ChatMode } from '../types';
 import { telemetryClient } from '../services/telemetry/TelemetryClient';
+import { Mic, MicOff, AlertCircle, Activity } from 'lucide-react';
+
+interface LiveAudioProps {
+    isActive: boolean;
+    onDeactivate?: () => void;
+}
 
 /**
- * Componente para la captura de audio en vivo, diseñado con resiliencia.
+ * Componente de captura de audio resiliente.
+ * Gestiona el ciclo de vida del AudioContext y MediaStream de forma segura.
  */
-export function LiveAudio() {
-    // We cannot use setMode from useChatState because it doesn't exist yet in the hook.
-    // Ideally we should refactor useChatState to support global mode switching.
-    // For now, we accept that LiveAudio reads the mode but might not be able to switch it back nicely.
-    const { messages } = useChatState();
-    // Wait, useChatState exposes: { messages, isLoading, error, sendMessage... }
-    // It does not expose `mode`. The `mode` is a property of `ChatMessage`.
-    // The previous code seemed to assume a global `mode` state.
-
-    // To make this compile without mocked logic, I will assume `LiveAudio` is
-    // controlled by a prop or global context that is currently missing.
-    // I will keep the local mock to avoid breaking the build, but use string literals.
-
-    const [mode, setMode] = useState<ChatMode>('IDLE'); // Local state for now
-
+export const LiveAudio: React.FC<LiveAudioProps> = ({ isActive, onDeactivate }) => {
     const [audioError, setAudioError] = useState<string | null>(null);
+    const [isInitialized, setIsInitialized] = useState(false);
     
     const streamRef = useRef<MediaStream | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
-    
-    const isLive = mode === 'LIVE_AUDIO';
+    const cleanupRef = useRef<(() => void) | null>(null);
 
     useEffect(() => {
-        if (!isLive) {
-            return; // Solo actuar si el modo es el correcto
+        if (!isActive) {
+            cleanup();
+            setIsInitialized(false);
+            return;
         }
 
         const initializeAudio = async () => {
@@ -41,67 +34,77 @@ export function LiveAudio() {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 streamRef.current = stream;
 
-                const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+                const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+                const audioContext = new AudioContextClass();
                 audioContextRef.current = audioContext;
 
-                // Aquí se conectaría a un AudioWorklet o a un Web Worker para el procesamiento
+                // Visualizer placeholder or Worklet connection goes here
                 // const source = audioContext.createMediaStreamSource(stream);
-                // ...
                 
                 setAudioError(null);
+                setIsInitialized(true);
                 telemetryClient.trackEvent({ eventName: 'LiveAudio.Init.Success' });
 
             } catch (error) {
                 const err = error instanceof Error ? error : new Error('Unknown audio error');
                 const errorMessage = err.name === 'NotAllowedError' 
-                    ? 'Permission to use microphone was denied. Please check your browser settings.'
-                    : 'An error occurred with the audio hardware or I/O.';
+                    ? 'Microphone access denied.'
+                    : 'Audio hardware error.';
                 
+                console.error("[LiveAudio]", err);
                 setAudioError(errorMessage);
-                telemetryClient.trackError(err, { 
-                    eventName: 'LiveAudio.Init.Failure', 
-                    context: errorMessage 
-                });
+                telemetryClient.trackError(err, { eventName: 'LiveAudio.Init.Failure', context: errorMessage });
                 
-                // Regresar a un estado seguro para que la UI se recupere
-                setMode('IDLE');
+                if (onDeactivate) onDeactivate();
             }
         };
 
         initializeAudio();
 
-        // Función de limpieza determinista
-        return () => {
-            if (streamRef.current) {
-                streamRef.current.getTracks().forEach(track => track.stop());
-                streamRef.current = null;
-            }
-            if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-                audioContextRef.current.close().catch(e => {
-                    telemetryClient.trackError(e, { eventName: 'LiveAudio.Cleanup.Error' });
-                });
-                audioContextRef.current = null;
-            }
-            telemetryClient.trackEvent({ eventName: 'LiveAudio.Cleanup.Complete' });
-        };
-    }, [isLive]);
+        return cleanup;
+    }, [isActive, onDeactivate]);
+
+    const cleanup = () => {
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+        }
+        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+            audioContextRef.current.close().catch(e => console.warn("AudioContext close error", e));
+            audioContextRef.current = null;
+        }
+        if (cleanupRef.current) {
+            cleanupRef.current();
+            cleanupRef.current = null;
+        }
+    };
 
     if (audioError) {
         return (
-            <div style={{ color: 'red', padding: '10px', border: '1px solid red', margin: '10px 0' }}>
-                <strong>🔴 Critical Audio Error:</strong> {audioError}
-                <p>The Live Audio API is unavailable. Please use text input instead.</p>
+            <div className="flex flex-col items-center gap-2 p-4 border border-red-500/30 bg-red-950/20 rounded-lg text-red-400">
+                <AlertCircle size={24} />
+                <span className="font-mono text-sm">{audioError}</span>
             </div>
         );
     }
     
-    if (isLive) {
-        return (
-            <div style={{ color: 'lightblue', padding: '10px' }}>
-                🎙️ **Live Audio Activated.** Capturing audio...
+    if (!isActive) return null;
+
+    return (
+        <div className="flex flex-col items-center gap-4 animate-fade-in">
+            <div className="relative">
+                <div className="absolute inset-0 bg-red-500/20 rounded-full animate-ping"></div>
+                <div className="relative p-4 bg-red-500/10 border border-red-500/50 rounded-full text-red-500">
+                    <Mic size={32} />
+                </div>
             </div>
-        );
-    }
-    
-    return null; // No renderizar nada si no está en modo Live Audio
-}
+            <div className="flex items-center gap-2 text-red-400 font-mono text-xs uppercase tracking-widest">
+                <Activity size={14} className="animate-pulse" />
+                Live Audio Stream Active
+            </div>
+            <p className="text-slate-500 text-xs max-w-xs text-center">
+                Audio is being processed locally. (Visualizer Module Pending)
+            </p>
+        </div>
+    );
+};
