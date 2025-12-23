@@ -1,7 +1,7 @@
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { OmniSuite } from '../components/OmniSuite';
+import App from '../App';
 import './global.css'; // Import Tailwind CSS
 
 const rootElement = document.getElementById('root');
@@ -11,6 +11,6 @@ const root = ReactDOM.createRoot(rootElement);
 
 root.render(
   <React.StrictMode>
-    <OmniSuite />
+    <App />
   </React.StrictMode>
 );
