@@ -7,22 +7,27 @@
         "dev": "GENKIT_ENV=dev npx tsx --watch server.ts"
     },
     "dependencies": {
-        "@google/generative-ai": "^0.18.0",
         "@genkit-ai/core": "^1.24.0",
         "@genkit-ai/google-genai": "^1.24.0",
-        "express": "^4.17.13",
-        "zod": "^3.23.8",
+        "@google/generative-ai": "^0.18.0",
+        "express": "^4.22.1",
+        "lucide-react": "^0.417.0",
         "react": "^18.3.1",
         "react-dom": "^18.3.1",
-        "lucide-react": "^0.417.0"
+        "zod": "^3.23.8"
     },
     "devDependencies": {
         "@types/express": "^4.17.13",
         "@types/react": "^18.3.3",
         "@types/react-dom": "^18.3.0",
+        "@vitejs/plugin-react": "^5.1.2",
+        "autoprefixer": "^10.4.23",
         "genkit-cli": "^1.24.0",
+        "postcss": "^8.5.6",
+        "tailwindcss": "^3.4.17",
         "tsx": "^4.19.2",
-        "typescript": "^5.6.3"
+        "typescript": "^5.6.3",
+        "vite": "^7.3.0"
     },
     "keywords": [],
     "author": "",
