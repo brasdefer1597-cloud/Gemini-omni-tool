@@ -6,9 +6,9 @@
  * con la identidad CHALAMANDRA y el arsenal de herramientas (`Function Calling`).
  */
 
-import { GoogleGenerativeAI, FunctionDeclarationSchemaType } from "@google/genai";
+import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { IGenAIAdapter, ModelConfig, GenerationResult, Tool, ImageConfig } from "../types";
-import { SYSTEM_INSTRUCTION } from './GeminiOmniTool'; // Importa la identidad núcleo
+import { SYSTEM_INSTRUCTION } from './identity'; // Importa la identidad núcleo
 
 // --- ARSENAL DE HERRAMIENTAS (FUNCTION CALLING DEFINITIONS) ---
 const tools: Tool[] = [
@@ -18,14 +18,14 @@ const tools: Tool[] = [
                 name: "generate_image",
                 description: "Crea una imagen a partir de una descripción detallada. Úsalo cuando el usuario pida explícitamente generar un arte, logo, visual o imagen.",
                 parameters: {
-                    type: FunctionDeclarationSchemaType.OBJECT,
+                    type: SchemaType.OBJECT,
                     properties: {
                         prompt: {
-                            type: FunctionDeclarationSchemaType.STRING,
+                            type: SchemaType.STRING,
                             description: "Una descripción muy detallada y vívida de la imagen a generar."
                         },
                         style: {
-                            type: FunctionDeclarationSchemaType.STRING,
+                            type: SchemaType.STRING,
                             description: "El estilo artístico deseado (ej: 'fotorealista', 'cyberpunk', 'fractal', 'minimalista')."
                         }
                     },
@@ -36,14 +36,14 @@ const tools: Tool[] = [
                 name: "generate_video_concept",
                 description: "Genera un concepto de video estructurado a partir de un tema. Úsalo para desarrollar ideas para contenido de video.",
                 parameters: {
-                    type: FunctionDeclarationSchemaType.OBJECT,
+                    type: SchemaType.OBJECT,
                     properties: {
                         topic: {
-                            type: FunctionDeclarationSchemaType.STRING,
+                            type: SchemaType.STRING,
                             description: "El tema central del video."
                         },
                         length_minutes: {
-                            type: FunctionDeclarationahDeclarationSchemaType.NUMBER,
+                            type: SchemaType.NUMBER,
                             description: "La duración aproximada del video en minutos."
                         }
                     },

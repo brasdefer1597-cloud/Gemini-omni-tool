@@ -1,12 +1,14 @@
 
 import React, { useState } from 'react';
 import { ChatInterface } from './ChatInterface';
+import { DialecticMode } from './DialecticMode';
 import { LiveAudio } from './LiveAudio';
 import { ProImageGen } from './ProImageGen';
-import { MessageSquare, Image, Zap, Film, Send, Music } from 'lucide-react';
+import { MessageSquare, Image, Zap, Film, Send, Music, Brain } from 'lucide-react';
 
 const TOOLS = [
     { id: 'chat', name: 'Chat & Grounding', icon: <MessageSquare size={18} /> },
+    { id: 'dialectic', name: 'Studio Élite (Dialectic)', icon: <Brain size={18} /> },
     { id: 'image', name: 'Gen 3 Pro Studio', icon: <Image size={18} /> },
     { id: 'flash', name: 'Magic Editor (Flash)', icon: <Zap size={18} /> },
     { id: 'video', name: 'Veo Video Studio', icon: <Film size={18} /> },
@@ -41,6 +43,8 @@ const MainContent: React.FC<{ activeTool: string }> = ({ activeTool }) => {
     switch (activeTool) {
         case 'chat':
             return <ChatInterface />;
+        case 'dialectic':
+            return <DialecticMode />;
         case 'image':
             return <ProImageGen />;
         case 'audio':

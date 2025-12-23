@@ -7,7 +7,11 @@
  */
 
 // --- UI & State Management --- //
-export type ChatMode = 'FAST' | 'THINKING' | 'SEARCH';
+export type ChatMode = 'FAST' | 'THINKING' | 'SEARCH' | 'LIVE_AUDIO' | 'IDLE' | 'DIALECTIC' | 'auto' | 'elite' | 'nano';
+// Added 'auto' | 'elite' | 'nano' to be compatible with ServiceMode if needed,
+// or I will keep ServiceMode separate.
+// DialecticMode uses 'ServiceMode' for the internal state, but 'ChatMode' is for the global app state.
+// 'DIALECTIC' is the global mode to switch to that view.
 
 export interface ChatMessage {
   id: string;
