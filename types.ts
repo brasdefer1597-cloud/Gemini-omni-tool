@@ -93,3 +93,18 @@ export interface IChatRepository {
     generateText(prompt: string, imageParts: any[] | null, modelConfig: ModelConfig): Promise<GenerateContentResponse>;
     pollVideo(jobId: string): Promise<GenerateContentResponse>;
 }
+
+export interface Attachment {
+    name: string;
+    mimeType: string;
+    uri: string;
+}
+
+export interface DialecticResult {
+    fresa: {
+        confidence: number;
+        analysis: string;
+    };
+    synthesis: string;
+    antithesis?: string;
+}
