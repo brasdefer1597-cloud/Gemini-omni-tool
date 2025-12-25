@@ -1,17 +1,29 @@
 
 // services/telemetry/TelemetryClient.ts
-import { MetricPayload } from '../../arch/models';
+import { MetricPayload } from '../../types';
 
 /**
  * @file Cliente de telemetría para logging estructurado.
  */
 
 export class TelemetryClient {
-    
+    private worker: Worker | null = null;
+
     constructor() {
-        // En una aplicación real, aquí se podría inicializar un Web Worker
-        // para descargar el envío de telemetría fuera del hilo principal.
-        console.log("Telemetry Client Initialized for Structured Logging.");
+        if (typeof Worker !== 'undefined') {
+            try {
+                // Initialize the Web Worker
+                this.worker = new Worker(new URL('./telemetry.worker.ts', import.meta.url), { type: 'module' });
+                this.worker.onerror = (error) => {
+                    console.error('Telemetry Worker Error:', error);
+                };
+                console.log("Telemetry Client Initialized with Web Worker.");
+            } catch (e) {
+                console.warn('Failed to initialize Telemetry Worker, falling back to main thread.', e);
+            }
+        } else {
+            console.log("Telemetry Client Initialized (No Worker support).");
+        }
     }
 
     /**
@@ -24,10 +36,12 @@ export class TelemetryClient {
             ...payload,
         };
 
-        // Imprime en la consola con un prefijo especial para un fácil filtrado y análisis.
-        // En producción, esto se sustituiría por una llamada a un endpoint de logging:
-        // fetch('/api/log', { method: 'POST', body: JSON.stringify(logEntry) });
-        console.log(`[TELEMETRY_SRAP] ${JSON.stringify(logEntry)}`);
+        if (this.worker) {
+            this.worker.postMessage({ type: 'LOG', payload: logEntry });
+        } else {
+            // Fallback to main thread logging
+            console.log(`[TELEMETRY_SRAP] ${JSON.stringify(logEntry)}`);
+        }
     }
 
     /**
